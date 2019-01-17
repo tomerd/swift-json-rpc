@@ -29,8 +29,6 @@ internal final class JsonCodec: ByteToMessageDecoder, ChannelOutboundHandler {
         if let r = readable {
             // copy the slice
             let slice = buffer.readSlice(length: r)!
-            // move buffer for next iteration
-            buffer.moveReaderIndex(forwardBy: 1)
             // call next handler
             ctx.fireChannelRead(wrapInboundOut(slice))
             return .continue
@@ -42,7 +40,7 @@ internal final class JsonCodec: ByteToMessageDecoder, ChannelOutboundHandler {
     public func write(ctx: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
         var buffer = self.unwrapOutboundIn(data)
         // add delimiter
-        buffer.write(bytes: [delimiter])
+        buffer.write(integer: delimiter)
         ctx.write(wrapOutboundOut(buffer), promise: promise)
     }
 

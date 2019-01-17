@@ -5,19 +5,20 @@ public final class TCPClient {
     public let group: EventLoopGroup
     public let config: Config
     private var channel: Channel?
-    private var shutdown = false
 
     public init(group: EventLoopGroup, config: Config = Config()) {
         self.group = group
         self.config = config
         self.channel = nil
+        self.state = .initializing
     }
 
     deinit {
-        assert(shutdown)
+        assert(.disconnected == self.state)
     }
 
     public func connect(host: String, port: Int) -> EventLoopFuture<TCPClient> {
+        assert(.initializing == self.state)
         let bootstrap = ClientBootstrap(group: self.group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelInitializer { channel in
@@ -27,31 +28,33 @@ public final class TCPClient {
                     .then { channel.pipeline.add(handler: Handler()) }
             }
 
-        print("\(self) connecting to \(host):\(port)")
+        self.state = .connecting("\(host):\(port)")
         return bootstrap.connect(host: host, port: port).then { channel in
             self.channel = channel
-            guard let localAddress = channel.localAddress else {
-                return channel.eventLoop.newFailedFuture(error: ClientError.cantBind)
-            }
-            print("\(self) connected to \(localAddress)")
+            self.state = .connected
             return channel.eventLoop.newSucceededFuture(result: self)
         }
     }
 
     public func disconnect() -> EventLoopFuture<Void> {
-        print("disconnecting \(self)")
+        if .connected != self.state {
+            return self.group.next().newFailedFuture(error: ClientError.notReady)
+        }
         guard let channel = self.channel else {
             return self.group.next().newFailedFuture(error: ClientError.notReady)
         }
+        self.state = .disconnecting
         channel.closeFuture.whenComplete {
-            self.shutdown = true
-            print("\(self) disconnecting")
+            self.state = .disconnected
         }
         channel.close(promise: nil)
         return channel.closeFuture
     }
 
     public func call(method: String, params: RPCObject) -> EventLoopFuture<Result> {
+        if .connected != self.state {
+            return self.group.next().newFailedFuture(error: ClientError.notReady)
+        }
         guard let channel = self.channel else {
             return self.group.next().newFailedFuture(error: ClientError.notReady)
         }
@@ -65,6 +68,30 @@ public final class TCPClient {
         }
     }
 
+    private var _state = State.initializing
+    private let lock = NSLock()
+    private var state: State {
+        get {
+            return self.lock.withLock {
+                _state
+            }
+        }
+        set {
+            self.lock.withLock {
+                _state = newValue
+                print("\(self) \(_state)")
+            }
+        }
+    }
+
+    private enum State: Equatable {
+        case initializing
+        case connecting(String)
+        case connected
+        case disconnecting
+        case disconnected
+    }
+
     public struct Config {
         public let timeout: TimeAmount
 
@@ -75,7 +102,7 @@ public final class TCPClient {
 
     public typealias Result = ResultType<RPCObject, Error>
 
-    public struct Error: Equatable {
+    public struct Error: Swift.Error, Equatable {
         public let kind: Kind
         public let description: String
 

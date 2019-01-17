@@ -6,19 +6,20 @@ public final class TCPServer {
     private let config: Config
     private var channel: Channel?
     private let closure: RPCClosure
-    private var shutdown = false
 
     public init(group: EventLoopGroup, config: Config = Config(), closure: @escaping RPCClosure) {
         self.group = group
         self.config = config
         self.closure = closure
+        self.state = .initializing
     }
 
     deinit {
-        assert(shutdown)
+        assert(.stopped == self.state)
     }
 
     public func start(host: String, port: Int) -> EventLoopFuture<TCPServer> {
+        assert(.initializing == self.state)
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
@@ -31,28 +32,50 @@ public final class TCPServer {
             .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
             .childChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
 
-        print("starting \(self) on \(host):\(port)")
+        self.state = .starting("\(host):\(port)")
         return bootstrap.bind(host: host, port: port).then { channel in
             self.channel = channel
-            guard let localAddress = channel.localAddress else {
-                return channel.eventLoop.newFailedFuture(error: ServerError.cantBind)
-            }
-            print("\(self) started and listening on \(localAddress)")
+            self.state = .started
             return channel.eventLoop.newSucceededFuture(result: self)
         }
     }
 
     public func stop() -> EventLoopFuture<Void> {
-        print("stopping \(self)")
+        if .started != self.state {
+            return self.group.next().newFailedFuture(error: ServerError.notReady)
+        }
         guard let channel = self.channel else {
             return self.group.next().newFailedFuture(error: ServerError.notReady)
         }
+        self.state = .stopping
         channel.closeFuture.whenComplete {
-            self.shutdown = true
-            print("\(self) stopped")
+            self.state = .stopped
         }
-        channel.close(promise: nil)
-        return channel.closeFuture
+        return channel.close()
+    }
+
+    private var _state = State.initializing
+    private let lock = NSLock()
+    private var state: State {
+        get {
+            return self.lock.withLock {
+                _state
+            }
+        }
+        set {
+            self.lock.withLock {
+                _state = newValue
+                print("\(self) \(_state)")
+            }
+        }
+    }
+
+    private enum State: Equatable {
+        case initializing
+        case starting(String)
+        case started
+        case stopping
+        case stopped
     }
 
     public struct Config {
