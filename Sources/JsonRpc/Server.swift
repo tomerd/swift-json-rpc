@@ -77,14 +77,6 @@ public final class TCPServer {
         case stopping
         case stopped
     }
-
-    public struct Config {
-        public let timeout: TimeAmount
-
-        public init(timeout: TimeAmount = TimeAmount.seconds(5)) {
-            self.timeout = timeout
-        }
-    }
 }
 
 private class Handler: ChannelInboundHandler {

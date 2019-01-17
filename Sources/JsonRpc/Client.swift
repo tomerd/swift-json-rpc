@@ -92,14 +92,6 @@ public final class TCPClient {
         case disconnected
     }
 
-    public struct Config {
-        public let timeout: TimeAmount
-
-        public init(timeout: TimeAmount = TimeAmount.seconds(5)) {
-            self.timeout = timeout
-        }
-    }
-
     public typealias Result = ResultType<RPCObject, Error>
 
     public struct Error: Swift.Error, Equatable {

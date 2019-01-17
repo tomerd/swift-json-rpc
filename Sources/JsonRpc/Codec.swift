@@ -26,14 +26,14 @@ internal final class JsonCodec: ByteToMessageDecoder, ChannelOutboundHandler {
             }
             return nil
         }
-        if let r = readable {
-            // copy the slice
-            let slice = buffer.readSlice(length: r)!
-            // call next handler
-            ctx.fireChannelRead(wrapInboundOut(slice))
-            return .continue
+        guard let r = readable else {
+            return .needMoreData
         }
-        return .needMoreData
+        // slice the buffer
+        let slice = buffer.readSlice(length: r)!
+        // call next handler
+        ctx.fireChannelRead(wrapInboundOut(slice))
+        return .continue
     }
 
     // outbound
@@ -94,9 +94,9 @@ internal final class CodableCodec<In, Out>: ChannelInboundHandler, ChannelOutbou
             buffer.write(bytes: data)
             ctx.write(wrapOutboundOut(buffer), promise: promise)
         } catch let error as EncodingError {
-            ctx.fireErrorCaught(CodecError.badJson(error))
+            promise?.fail(error: CodecError.badJson(error))
         } catch {
-            ctx.fireErrorCaught(error)
+            promise?.fail(error: error)
         }
     }
 }
