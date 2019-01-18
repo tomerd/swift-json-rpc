@@ -19,7 +19,7 @@ private class Calculator {
         guard values.count > 1 else {
             return callback(.failure(RPCError(.invalidParams("expected 2 arguments or more"))))
         }
-        return callback(.success(.number(values.reduce(0, +))))
+        return callback(.success(.integer(values.reduce(0, +))))
     }
 
     func subtract(params: RPCObject, callback: (RPCResult) -> Void) {
@@ -27,7 +27,7 @@ private class Calculator {
         guard values.count > 1 else {
             return callback(.failure(RPCError(.invalidParams("expected 2 arguments or more"))))
         }
-        return callback(.success(.number(values[1...].reduce(values[0], -))))
+        return callback(.success(.integer(values[1...].reduce(values[0], -))))
     }
 
     func extractNumbers(_ object: RPCObject) -> [Int] {
@@ -35,7 +35,7 @@ private class Calculator {
         case .list(let items):
             return items.map {
                 switch $0 {
-                case .number(let value):
+                case .integer(let value):
                     return value
                 default:
                     return nil

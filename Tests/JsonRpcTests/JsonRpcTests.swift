@@ -193,54 +193,85 @@ final class JsonRpcTests: XCTestCase {
     }
 
     func testBadServerResponse1() {
-        let address = ("127.0.0.1", 8000)
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        // start server
-        let server = BadServer(group: eventLoopGroup)
-        _ = try! server.start(host: address.0, port: address.1).wait()
-        // connect client
-        let client = TCPClient(group: eventLoopGroup)
-        _ = try! client.connect(host: address.0, port: address.1).wait()
-        // perform the method call
-        let result = try! client.call(method: "{boom}\n", params: .none).wait()
-        switch result {
-        case .success(let response):
-            XCTFail("expected to fail but succeeded with \(response)")
-        case .failure(let error):
-            XCTAssertEqual(TCPClient.Error.Kind.invalidServerResponse, error.kind, "expected error ot match")
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = BadServer(group: eventLoopGroup, framing: framing)
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = TCPClient(group: eventLoopGroup, config: TCPClient.Config(timeout: TimeAmount.milliseconds(100), framing: framing))
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.call(method: "{boom}", params: .none).wait()
+            switch result {
+            case .success(let response):
+                XCTFail("expected to fail but succeeded with \(response)")
+            case .failure(let error):
+                XCTAssertEqual(TCPClient.Error.Kind.invalidServerResponse, error.kind, "expected error ot match")
+            }
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
         }
-        // shutdown
-        try! client.disconnect().wait()
-        try! server.stop().wait()
     }
 
     func testBadServerResponse2() {
-        let address = ("127.0.0.1", 8000)
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        // start server
-        let server = BadServer(group: eventLoopGroup)
-        _ = try! server.start(host: address.0, port: address.1).wait()
-        // connect client
-        let client = TCPClient(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100)))
-        _ = try! client.connect(host: address.0, port: address.1).wait()
-        // perform the method call
-        let result = try! client.call(method: "boom", params: .none).wait()
-        switch result {
-        case .success(let response):
-            XCTFail("expected to fail but succeeded with \(response)")
-        case .failure(let error):
-            XCTAssertEqual(TCPClient.Error.Kind.invalidServerResponse, error.kind, "expected error ot match")
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = BadServer(group: eventLoopGroup, framing: framing)
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = TCPClient(group: eventLoopGroup, config: TCPClient.Config(timeout: TimeAmount.milliseconds(100), framing: framing))
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.call(method: "boom", params: .none).wait()
+            switch result {
+            case .success(let response):
+                XCTFail("expected to fail but succeeded with \(response)")
+            case .failure(let error):
+                XCTAssertEqual(TCPClient.Error.Kind.invalidServerResponse, error.kind, "expected error ot match")
+            }
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
         }
-        // shutdown
-        try! client.disconnect().wait()
-        try! server.stop().wait()
+    }
+
+    func testBadServerResponse3() {
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = BadServer(group: eventLoopGroup, framing: framing)
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = TCPClient(group: eventLoopGroup, config: TCPClient.Config(timeout: TimeAmount.milliseconds(100), framing: framing))
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.call(method: "do not encode", params: .none).wait()
+            switch result {
+            case .success(let response):
+                XCTFail("expected to fail but succeeded with \(response)")
+            case .failure(let error):
+                XCTAssertEqual(TCPClient.Error.Kind.invalidServerResponse, error.kind, "expected error ot match")
+            }
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
+        }
     }
 
     func testServerDisconnect() {
         let address = ("127.0.0.1", 8000)
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         // start server
-        let server = BadServer(group: eventLoopGroup)
+        let server = BadServer(group: eventLoopGroup, framing: .default)
         _ = try! server.start(host: address.0, port: address.1).wait()
         // connect client
         let client = TCPClient(group: eventLoopGroup)
@@ -262,10 +293,10 @@ final class JsonRpcTests: XCTestCase {
         let address = ("127.0.0.1", 8000)
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         // start server
-        let server = BadServer(group: eventLoopGroup)
+        let server = BadServer(group: eventLoopGroup, framing: .default)
         _ = try! server.start(host: address.0, port: address.1).wait()
         // connect client
-        let client = TCPClient(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100)))
+        let client = TCPClient(group: eventLoopGroup, config: TCPClient.Config(timeout: TimeAmount.milliseconds(100)))
         _ = try! client.connect(host: address.0, port: address.1).wait()
         // perform the method call
         XCTAssertThrowsError(try client.call(method: "timeout", params: .none).wait()) { error in
@@ -277,57 +308,111 @@ final class JsonRpcTests: XCTestCase {
     }
 
     func testBadClientRequest1() {
-        let address = ("127.0.0.1", 8000)
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        // start server
-        let server = TCPServer(group: eventLoopGroup) { _, _, callback in
-            callback(.success(RPCObject("yay")))
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(100), framing: framing)) { _, _, callback in
+                callback(.success(RPCObject("yay")))
+            }
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = BadClient(group: eventLoopGroup, framing: framing)
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.request(string: "{boom}").wait()
+            XCTAssertNil(result.result, "expected to fail but succeeded with \(result.result!)")
+            XCTAssertNotNil(result.error, "expected error to be non-nil")
+            XCTAssertEqual(result.error!.code, JSONErrorCode.parseError.rawValue, "expected error ot match")
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
         }
-        _ = try! server.start(host: address.0, port: address.1).wait()
-        // connect client
-        let client = BadClient(group: eventLoopGroup)
-        _ = try! client.connect(host: address.0, port: address.1).wait()
-        // perform the method call
-        let result = try! client.request(string: "{boom}\n").wait()
-        XCTAssertNil(result.result, "expected to fail but succeeded with \(result.result!)")
-        XCTAssertNotNil(result.error, "expected error to be non-nil")
-        XCTAssertEqual(result.error!.code, JSONErrorCode.parseError.rawValue, "expected error ot match")
-        // shutdown
-        try! client.disconnect().wait()
-        try! server.stop().wait()
     }
 
     func testBadClientRequest2() {
-        let address = ("127.0.0.1", 8000)
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        // start server
-        let server = TCPServer(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
-            callback(.success(RPCObject("yay")))
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(100), framing: framing)) { _, _, callback in
+                callback(.success(RPCObject("yay")))
+            }
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = BadClient(group: eventLoopGroup, framing: framing)
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.request(string: "boom").wait()
+            XCTAssertNil(result.result, "expected to fail but succeeded with \(result.result!)")
+            XCTAssertNotNil(result.error, "expected error to be non-nil")
+            XCTAssertEqual(result.error!.code, JSONErrorCode.parseError.rawValue, "expected error ot match")
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
         }
-        _ = try! server.start(host: address.0, port: address.1).wait()
-        // connect client
-        let client = BadClient(group: eventLoopGroup)
-        _ = try! client.connect(host: address.0, port: address.1).wait()
-        // perform the method call
-        let result = try! client.request(string: "boom").wait()
-        XCTAssertNil(result.result, "expected to fail but succeeded with \(result.result!)")
-        XCTAssertNotNil(result.error, "expected error to be non-nil")
-        XCTAssertEqual(result.error!.code, JSONErrorCode.parseError.rawValue, "expected error ot match")
-        // shutdown
-        try! client.disconnect().wait()
-        try! server.stop().wait()
+    }
+
+    func testBadClientRequest3() {
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(100), framing: framing)) { _, _, callback in
+                callback(.success(RPCObject("yay")))
+            }
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = BadClient(group: eventLoopGroup, framing: framing)
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.request(string: "do not encode").wait()
+            XCTAssertNil(result.result, "expected to fail but succeeded with \(result.result!)")
+            XCTAssertNotNil(result.error, "expected error to be non-nil")
+            XCTAssertEqual(result.error!.code, JSONErrorCode.parseError.rawValue, "expected error ot match")
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
+        }
+    }
+
+    func testBadClientRequest4() {
+        Framing.allCases.forEach { framing in
+            print("===== testing with \(framing) framing")
+            let address = ("127.0.0.1", 8000)
+            let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
+            // start server
+            let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(10000), framing: framing)) { _, _, callback in
+                callback(.success(RPCObject("yay")))
+            }
+            _ = try! server.start(host: address.0, port: address.1).wait()
+            // connect client
+            let client = BadClient(group: eventLoopGroup, framing: framing)
+            _ = try! client.connect(host: address.0, port: address.1).wait()
+            // perform the method call
+            let result = try! client.request(string: String(repeating: "*", count: 1_000_000)).wait()
+            XCTAssertNil(result.result, "expected to fail but succeeded with \(result.result!)")
+            XCTAssertNotNil(result.error, "expected error to be non-nil")
+            XCTAssertEqual(result.error!.code, JSONErrorCode.invalidRequest.rawValue, "expected error ot match")
+            // shutdown
+            try! client.disconnect().wait()
+            try! server.stop().wait()
+        }
     }
 
     func testDisconnectAfterBadClientRequest() {
         let address = ("127.0.0.1", 8000)
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         // start server
-        let server = TCPServer(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
+        let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
             callback(.success(RPCObject("yay")))
         }
         _ = try! server.start(host: address.0, port: address.1).wait()
         // connect client
-        let client = BadClient(group: eventLoopGroup)
+        let client = BadClient(group: eventLoopGroup, framing: .default)
         _ = try! client.connect(host: address.0, port: address.1).wait()
         // perform a bad method call
         let response = try! client.request(string: "boom").wait()
@@ -348,16 +433,18 @@ final class JsonRpcTests: XCTestCase {
 
 private class BadServer {
     private let group: EventLoopGroup
+    private let framing: Framing
     private var channel: Channel?
 
-    public init(group: EventLoopGroup) {
+    public init(group: EventLoopGroup, framing: Framing) {
         self.group = group
+        self.framing = framing
     }
 
     func start(host: String, port: Int) -> EventLoopFuture<BadServer> {
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-            .childChannelInitializer { channel in channel.pipeline.add(handler: Handler()) }
+            .childChannelInitializer { channel in channel.pipeline.add(handler: Handler(framing: self.framing)) }
         return bootstrap.bind(host: host, port: port).then { channel in
             self.channel = channel
             return channel.eventLoop.newSucceededFuture(result: self)
@@ -376,9 +463,15 @@ private class BadServer {
         public typealias InboundIn = ByteBuffer
         public typealias OutboundOut = ByteBuffer
 
+        private let framing: Framing
+
+        public init(framing: Framing) {
+            self.framing = framing
+        }
+
         public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
             var buffer = unwrapInboundIn(data)
-            let data = buffer.readData(length: buffer.readableBytes)!
+            let data = decode(&buffer, self.framing)
             do {
                 let request = try JSONDecoder().decode(JSONRequest.self, from: data)
                 if "timeout" == request.method {
@@ -387,9 +480,10 @@ private class BadServer {
                 if "disconnect" == request.method {
                     return ctx.channel.close(promise: nil)
                 }
-                var bufffer2 = ctx.channel.allocator.buffer(capacity: request.method.utf8.count)
-                bufffer2.write(bytes: request.method.utf8)
-                ctx.channel.writeAndFlush(wrapOutboundOut(bufffer2), promise: nil)
+                let encoded = "do not encode" != request.method ? encode(request.method, self.framing) : request.method
+                var bufffer2 = ctx.channel.allocator.buffer(capacity: encoded.utf8.count)
+                bufffer2.write(bytes: encoded.utf8)
+                ctx.writeAndFlush(NIOAny(bufffer2), promise: nil)
             } catch {
                 ctx.fireErrorCaught(error)
             }
@@ -399,16 +493,18 @@ private class BadServer {
 
 private class BadClient {
     public let group: EventLoopGroup
+    private let framing: Framing
     private var channel: Channel?
 
-    public init(group: EventLoopGroup) {
+    public init(group: EventLoopGroup, framing: Framing) {
         self.group = group
+        self.framing = framing
         self.channel = nil
     }
 
     public func connect(host: String, port: Int) -> EventLoopFuture<BadClient> {
         let bootstrap = ClientBootstrap(group: self.group)
-            .channelInitializer { channel in channel.pipeline.add(handler: Handler()) }
+            .channelInitializer { channel in channel.pipeline.add(handler: Handler(framing: self.framing)) }
         return bootstrap.connect(host: host, port: port).then { channel in
             self.channel = channel
             return channel.eventLoop.newSucceededFuture(result: self)
@@ -428,8 +524,9 @@ private class BadClient {
             return self.group.next().newFailedFuture(error: TestError.badState)
         }
         let promise: EventLoopPromise<JSONResponse> = channel.eventLoop.newPromise()
-        var buffer = channel.allocator.buffer(capacity: string.utf8.count)
-        buffer.write(bytes: string.utf8)
+        let encoded = string != "do not encode" ? encode(string, self.framing) : string
+        var buffer = channel.allocator.buffer(capacity: encoded.utf8.count)
+        buffer.write(bytes: encoded.utf8)
         let future = channel.writeAndFlush(RequestWrapper(promise: promise, request: buffer))
         future.cascadeFailure(promise: promise)
         return future.then {
@@ -442,7 +539,12 @@ private class BadClient {
         public typealias OutboundIn = RequestWrapper
         public typealias OutboundOut = ByteBuffer
 
+        private let framing: Framing
         private var queue = CircularBuffer<EventLoopPromise<JSONResponse>>()
+
+        public init(framing: Framing) {
+            self.framing = framing
+        }
 
         public func write(ctx: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
             let wrapper = self.unwrapOutboundIn(data)
@@ -453,7 +555,7 @@ private class BadClient {
         public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
             let promise = queue.removeFirst()
             var buffer = unwrapInboundIn(data)
-            let data = buffer.readData(length: buffer.readableBytes)!
+            let data = decode(&buffer, self.framing)
             do {
                 let response = try JSONDecoder().decode(JSONResponse.self, from: data)
                 promise.succeed(result: response)
@@ -471,4 +573,30 @@ private class BadClient {
 
 private enum TestError: Error {
     case badState
+}
+
+private func encode(_ text: String, _ framing: Framing) -> String {
+    switch framing {
+    case .default:
+        return text + "\r\n"
+    case .jsonpos:
+        return String(text.utf8.count, radix: 16).leftPadding(toLength: 8, withPad: "0") +
+            ":" +
+            text +
+            "\n"
+    case .brute:
+        return text
+    }
+}
+
+private func decode(_ buffer: inout ByteBuffer, _ framing: Framing) -> Data {
+    switch framing {
+    case .default:
+        return buffer.readData(length: buffer.readableBytes - 2)!
+    case .jsonpos:
+        buffer.moveReaderIndex(to: 9)
+        return buffer.readData(length: buffer.readableBytes - 1)!
+    case .brute:
+        return buffer.readData(length: buffer.readableBytes)!
+    }
 }

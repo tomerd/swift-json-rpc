@@ -20,13 +20,24 @@ public final class TCPServer {
 
     public func start(host: String, port: Int) -> EventLoopFuture<TCPServer> {
         assert(.initializing == self.state)
+
+        let framingHandler: ChannelHandler
+        switch self.config.framing {
+        case .jsonpos:
+            framingHandler = JsonPosCodec()
+        case .brute:
+            framingHandler = BruteForceCodec<JSONRequest>()
+        case .default:
+            framingHandler = NewlineCodec()
+        }
+
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(ChannelOptions.backlog, value: 256)
             .serverChannelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .childChannelInitializer { channel in
                 channel.pipeline.add(handler: IdleStateHandler(readTimeout: self.config.timeout))
-                    .then { channel.pipeline.add(handler: JsonCodec()) }
-                    .then { channel.pipeline.add(handler: CodableCodec<JSONRequest, JSONResponse>(JSONRequest.self)) }
+                    .then { channel.pipeline.add(handler: framingHandler) }
+                    .then { channel.pipeline.add(handler: CodableCodec<JSONRequest, JSONResponse>()) }
                     .then { channel.pipeline.add(handler: Handler(self.closure)) }
             }
             .childChannelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
@@ -77,6 +88,16 @@ public final class TCPServer {
         case stopping
         case stopped
     }
+
+    public struct Config {
+        public let timeout: TimeAmount
+        public let framing: Framing
+
+        public init(timeout: TimeAmount = TimeAmount.seconds(5), framing: Framing = .default) {
+            self.timeout = timeout
+            self.framing = framing
+        }
+    }
 }
 
 private class Handler: ChannelInboundHandler {
@@ -90,9 +111,6 @@ private class Handler: ChannelInboundHandler {
     }
 
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
-        if let remoteAddress = ctx.remoteAddress {
-            print("client", remoteAddress, "requested", data)
-        }
         let request = unwrapInboundIn(data)
         self.closure(request.method, RPCObject(request.params), { result in
             let response: JSONResponse
@@ -113,8 +131,11 @@ private class Handler: ChannelInboundHandler {
             print("client", remoteAddress, "error", error)
         }
         switch error {
-        case CodecError.notJson, CodecError.badJson:
+        case CodecError.badFraming, CodecError.badJson:
             let response = JSONResponse(id: "unknown", errorCode: .parseError, error: error)
+            ctx.channel.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
+        case CodecError.requestTooLarge:
+            let response = JSONResponse(id: "unknown", errorCode: .invalidRequest, error: error)
             ctx.channel.writeAndFlush(self.wrapOutboundOut(response), promise: nil)
         default:
             let response = JSONResponse(id: "unknown", errorCode: .internalError, error: error)

@@ -170,7 +170,8 @@ internal enum JSONErrorCode: Int, Codable {
 internal enum JSONObject: Codable {
     case none
     case string(String)
-    case number(Int)
+    case integer(Int)
+    case double(Double)
     case bool(Bool)
     case list([JSONObject])
     case dictionary([String: JSONObject])
@@ -181,8 +182,10 @@ internal enum JSONObject: Codable {
             self = .none
         case .string(let value):
             self = .string(value)
-        case .number(let value):
-            self = .number(value)
+        case .integer(let value):
+            self = .integer(value)
+        case .double(let value):
+            self = .double(value)
         case .bool(let value):
             self = .bool(value)
         case .list(let value):
@@ -196,7 +199,8 @@ internal enum JSONObject: Codable {
 internal extension JSONObject {
     enum CodingKeys: CodingKey {
         case string
-        case number
+        case integer
+        case double
         case bool
         case list
         case dictionary
@@ -211,21 +215,26 @@ internal extension JSONObject {
         } catch {
             do {
                 let value = try container.decode(Int.self)
-                self = .number(value)
+                self = .integer(value)
             } catch {
                 do {
-                    let value = try container.decode(Bool.self)
-                    self = .bool(value)
+                    let value = try container.decode(Double.self)
+                    self = .double(value)
                 } catch {
                     do {
-                        let value = try container.decode([JSONObject].self)
-                        self = .list(value)
+                        let value = try container.decode(Bool.self)
+                        self = .bool(value)
                     } catch {
                         do {
-                            let value = try container.decode([String: JSONObject].self)
-                            self = .dictionary(value)
+                            let value = try container.decode([JSONObject].self)
+                            self = .list(value)
                         } catch {
-                            self = .none
+                            do {
+                                let value = try container.decode([String: JSONObject].self)
+                                self = .dictionary(value)
+                            } catch {
+                                self = .none
+                            }
                         }
                     }
                 }
@@ -240,7 +249,9 @@ internal extension JSONObject {
             break
         case .string(let value):
             try container.encode(value)
-        case .number(let value):
+        case .integer(let value):
+            try container.encode(value)
+        case .double(let value):
             try container.encode(value)
         case .bool(let value):
             try container.encode(value)
@@ -255,7 +266,8 @@ internal extension JSONObject {
 public enum RPCObject: Equatable {
     case none
     case string(String)
-    case number(Int)
+    case integer(Int)
+    case double(Double)
     case bool(Bool)
     case list([RPCObject])
     case dictionary([String: RPCObject])
@@ -265,7 +277,11 @@ public enum RPCObject: Equatable {
     }
 
     public init(_ value: Int) {
-        self = .number(value)
+        self = .integer(value)
+    }
+
+    public init(_ value: Double) {
+        self = .double(value)
     }
 
     public init(_ value: Bool) {
@@ -288,14 +304,20 @@ public enum RPCObject: Equatable {
         self = .dictionary(value.mapValues { RPCObject($0) })
     }
 
+    public init(_ value: [RPCObject]) {
+        self = .list(value)
+    }
+
     internal init(_ object: JSONObject) {
         switch object {
         case .none:
             self = .none
         case .string(let value):
             self = .string(value)
-        case .number(let value):
-            self = .number(value)
+        case .integer(let value):
+            self = .integer(value)
+        case .double(let value):
+            self = .double(value)
         case .bool(let value):
             self = .bool(value)
         case .list(let value):

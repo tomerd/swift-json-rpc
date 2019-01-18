@@ -19,12 +19,23 @@ public final class TCPClient {
 
     public func connect(host: String, port: Int) -> EventLoopFuture<TCPClient> {
         assert(.initializing == self.state)
+
+        let framingHandler: ChannelHandler
+        switch self.config.framing {
+        case .jsonpos:
+            framingHandler = JsonPosCodec()
+        case .brute:
+            framingHandler = BruteForceCodec<JSONResponse>()
+        case .default:
+            framingHandler = NewlineCodec()
+        }
+
         let bootstrap = ClientBootstrap(group: self.group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelInitializer { channel in
                 channel.pipeline.add(handler: IdleStateHandler(readTimeout: self.config.timeout))
-                    .then { channel.pipeline.add(handler: JsonCodec()) }
-                    .then { channel.pipeline.add(handler: CodableCodec<JSONResponse, JSONRequest>(JSONResponse.self)) }
+                    .then { channel.pipeline.add(handler: framingHandler) }
+                    .then { channel.pipeline.add(handler: CodableCodec<JSONResponse, JSONRequest>()) }
                     .then { channel.pipeline.add(handler: Handler()) }
             }
 
@@ -130,6 +141,16 @@ public final class TCPClient {
             }
         }
     }
+
+    public struct Config {
+        public let timeout: TimeAmount
+        public let framing: Framing
+
+        public init(timeout: TimeAmount = TimeAmount.seconds(5), framing: Framing = .default) {
+            self.timeout = timeout
+            self.framing = framing
+        }
+    }
 }
 
 private class Handler: ChannelInboundHandler, ChannelOutboundHandler {
@@ -148,9 +169,6 @@ private class Handler: ChannelInboundHandler, ChannelOutboundHandler {
 
     // inbound
     public func channelRead(ctx: ChannelHandlerContext, data: NIOAny) {
-        if let remoteAddress = ctx.remoteAddress {
-            print("server", remoteAddress, "response", data)
-        }
         if self.queue.isEmpty {
             return ctx.fireChannelRead(data) // already complete
         }
@@ -170,7 +188,7 @@ private class Handler: ChannelInboundHandler, ChannelOutboundHandler {
         let requestId = item.0
         let promise = item.1
         switch error {
-        case CodecError.notJson, CodecError.badJson:
+        case CodecError.requestTooLarge, CodecError.badFraming, CodecError.badJson:
             promise.succeed(result: JSONResponse(id: requestId, errorCode: .parseError, error: error))
         default:
             promise.fail(error: error)

@@ -6,6 +6,12 @@ public enum ResultType<Value, Error> {
     case failure(Error)
 }
 
+public enum Framing: CaseIterable {
+    case `default`
+    case jsonpos
+    case brute
+}
+
 internal extension NSLock {
     func withLock<T>(_ body: () -> T) -> T {
         self.lock()
@@ -16,10 +22,13 @@ internal extension NSLock {
     }
 }
 
-public struct Config {
-    public let timeout: TimeAmount
-
-    public init(timeout: TimeAmount = TimeAmount.seconds(5)) {
-        self.timeout = timeout
+internal extension String {
+    func leftPadding(toLength: Int, withPad character: Character) -> String {
+        let stringLength = self.count
+        if stringLength < toLength {
+            return String(repeatElement(character, count: toLength - stringLength)) + self
+        } else {
+            return String(self.suffix(toLength))
+        }
     }
 }
