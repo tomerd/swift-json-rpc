@@ -217,8 +217,10 @@ switch CommandLine.arguments[1] {
 case "reset":
     reset(client)
 case "list":
+    let bulbs = list(client)
     print("======= bulbs =======")
-    list(client).forEach { print(" \($0)") }
+    bulbs.forEach { print(" \($0)") }
+    print("=====================")
 case "on":
     if CommandLine.arguments.count < 3 {
         fatalError("not enough arguments")

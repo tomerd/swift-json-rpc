@@ -207,7 +207,9 @@ private class Handler: ChannelInboundHandler, ChannelOutboundHandler {
         if let remoteAddress = ctx.remoteAddress {
             print("server ", remoteAddress, "disconnected")
         }
-        self.errorCaught(ctx: ctx, error: ClientError.connectionResetByPeer)
+        if !self.queue.isEmpty {
+            self.errorCaught(ctx: ctx, error: ClientError.connectionResetByPeer)
+        }
     }
 
     func userInboundEventTriggered(ctx: ChannelHandlerContext, event: Any) {
