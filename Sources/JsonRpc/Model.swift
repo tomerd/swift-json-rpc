@@ -171,6 +171,7 @@ internal enum JSONObject: Codable {
     case none
     case string(String)
     case number(Int)
+    case bool(Bool)
     case list([JSONObject])
     case dictionary([String: JSONObject])
 
@@ -178,10 +179,12 @@ internal enum JSONObject: Codable {
         switch object {
         case .none:
             self = .none
-        case .number(let value):
-            self = .number(value)
         case .string(let value):
             self = .string(value)
+        case .number(let value):
+            self = .number(value)
+        case .bool(let value):
+            self = .bool(value)
         case .list(let value):
             self = .list(value.map { JSONObject($0) })
         case .dictionary(let value):
@@ -194,30 +197,36 @@ internal extension JSONObject {
     enum CodingKeys: CodingKey {
         case string
         case number
+        case bool
         case list
         case dictionary
     }
 
     // FIXME: is there a more elegant way?
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.singleValueContainer()
         do {
-            let value = try container.decode(String.self, forKey: .string)
+            let value = try container.decode(String.self)
             self = .string(value)
         } catch {
             do {
-                let value = try container.decode(Int.self, forKey: .number)
+                let value = try container.decode(Int.self)
                 self = .number(value)
             } catch {
                 do {
-                    let value = try container.decode([JSONObject].self, forKey: .list)
-                    self = .list(value)
+                    let value = try container.decode(Bool.self)
+                    self = .bool(value)
                 } catch {
                     do {
-                        let value = try container.decode([String: JSONObject].self, forKey: .dictionary)
-                        self = .dictionary(value)
+                        let value = try container.decode([JSONObject].self)
+                        self = .list(value)
                     } catch {
-                        self = .none
+                        do {
+                            let value = try container.decode([String: JSONObject].self)
+                            self = .dictionary(value)
+                        } catch {
+                            self = .none
+                        }
                     }
                 }
             }
@@ -225,18 +234,20 @@ internal extension JSONObject {
     }
 
     func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
+        var container = encoder.singleValueContainer()
         switch self {
         case .none:
             break
         case .string(let value):
-            try container.encode(value, forKey: .string)
+            try container.encode(value)
         case .number(let value):
-            try container.encode(value, forKey: .number)
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
         case .list(let value):
-            try container.encode(value, forKey: .list)
+            try container.encode(value)
         case .dictionary(let value):
-            try container.encode(value, forKey: .dictionary)
+            try container.encode(value)
         }
     }
 }
@@ -245,6 +256,7 @@ public enum RPCObject: Equatable {
     case none
     case string(String)
     case number(Int)
+    case bool(Bool)
     case list([RPCObject])
     case dictionary([String: RPCObject])
 
@@ -254,6 +266,10 @@ public enum RPCObject: Equatable {
 
     public init(_ value: Int) {
         self = .number(value)
+    }
+
+    public init(_ value: Bool) {
+        self = .bool(value)
     }
 
     public init(_ value: [String]) {
@@ -280,6 +296,8 @@ public enum RPCObject: Equatable {
             self = .string(value)
         case .number(let value):
             self = .number(value)
+        case .bool(let value):
+            self = .bool(value)
         case .list(let value):
             self = .list(value.map { RPCObject($0) })
         case .dictionary(let value):

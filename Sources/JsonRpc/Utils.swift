@@ -18,7 +18,7 @@ internal extension NSLock {
 
 public struct Config {
     public let timeout: TimeAmount
-    
+
     public init(timeout: TimeAmount = TimeAmount.seconds(5)) {
         self.timeout = timeout
     }

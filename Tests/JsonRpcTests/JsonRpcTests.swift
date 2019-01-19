@@ -93,7 +93,10 @@ final class JsonRpcTests: XCTestCase {
     }
 
     func testParamTypes() {
-        let expectedParams = [RPCObject(["foo", "bar"]),
+        let expectedParams = [RPCObject("foo"),
+                              RPCObject(1),
+                              RPCObject(true),
+                              RPCObject(["foo", "bar"]),
                               RPCObject(["foo": "bar"]),
                               RPCObject([1, 2]),
                               RPCObject(["foo": 1, "bar": 2])]
@@ -127,7 +130,10 @@ final class JsonRpcTests: XCTestCase {
     func testResponseTypes() {
         let address = ("127.0.0.1", 8000)
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
-        let expectedResponse = [RPCObject(["foo", "bar"]),
+        let expectedResponse = [RPCObject("foo"),
+                                RPCObject(1),
+                                RPCObject(true),
+                                RPCObject(["foo", "bar"]),
                                 RPCObject(["foo": "bar"]),
                                 RPCObject([1, 2]),
                                 RPCObject(["foo": 1, "bar": 2])]
@@ -215,7 +221,7 @@ final class JsonRpcTests: XCTestCase {
         let server = BadServer(group: eventLoopGroup)
         _ = try! server.start(host: address.0, port: address.1).wait()
         // connect client
-        let client = TCPClient(group: eventLoopGroup, config: TCPClient.Config(timeout: TimeAmount.milliseconds(100)))
+        let client = TCPClient(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100)))
         _ = try! client.connect(host: address.0, port: address.1).wait()
         // perform the method call
         let result = try! client.call(method: "boom", params: .none).wait()
@@ -259,7 +265,7 @@ final class JsonRpcTests: XCTestCase {
         let server = BadServer(group: eventLoopGroup)
         _ = try! server.start(host: address.0, port: address.1).wait()
         // connect client
-        let client = TCPClient(group: eventLoopGroup, config: TCPClient.Config(timeout: TimeAmount.milliseconds(100)))
+        let client = TCPClient(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100)))
         _ = try! client.connect(host: address.0, port: address.1).wait()
         // perform the method call
         XCTAssertThrowsError(try client.call(method: "timeout", params: .none).wait()) { error in
@@ -295,7 +301,7 @@ final class JsonRpcTests: XCTestCase {
         let address = ("127.0.0.1", 8000)
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         // start server
-        let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
+        let server = TCPServer(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
             callback(.success(RPCObject("yay")))
         }
         _ = try! server.start(host: address.0, port: address.1).wait()
@@ -316,7 +322,7 @@ final class JsonRpcTests: XCTestCase {
         let address = ("127.0.0.1", 8000)
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
         // start server
-        let server = TCPServer(group: eventLoopGroup, config: TCPServer.Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
+        let server = TCPServer(group: eventLoopGroup, config: Config(timeout: TimeAmount.milliseconds(100))) { _, _, callback in
             callback(.success(RPCObject("yay")))
         }
         _ = try! server.start(host: address.0, port: address.1).wait()
